@@ -74,9 +74,12 @@
           </form>
         </li>
       </ul>
-      
     </div>
   </nav>
+
+  <div :class="{ progress: loading > 0}">
+      <div class="indeterminate"></div>
+  </div>
   <div>
     <div class="container">
     <div class="row">
@@ -215,9 +218,24 @@ var app = new Vue({
       this.accountId = localStorage.getItem('accountId');
       this.accountIdSearch();
     }
+    axios.interceptors.request.use(function(config) {
+      _this.loading += 1;;
+      return config;
+    });
+    axios.interceptors.response.use(function(response) {
+      _this.loading -= 1;
+      return response;
+    }, function(error){
+      _this.loading -= 1;
+      _this.error = error;
+      return error;
+    });;
+
   },
   data: function() {
     return {
+      loading: 0,
+      error: '',
       accountId: '',
       matchId: '',    
       heroes: [],
@@ -231,6 +249,7 @@ var app = new Vue({
   }, 
   methods: {
     clean: function() {
+      this.error = '';
       this.player = {};
       this.matches = [];
       this.selectedMatch = {};
