@@ -20,22 +20,38 @@
     margin: 0 0 0 0;
   } 
 
+  .hover {
+    background-color: #f2f2f2;
+  }
+
+  
+
   .chip-table img {
     margin: 0 0 0 -12px;
   } 
 
   td, th {
     padding: 0 0 0 0;
+    transition: background-color .25s ease;
   }
-
+  
+  body {
+    display: flex;
+    min-height: 100vh;
+    flex-direction: column;
+  }
+  
+  main {
+    flex: 1 0 auto;
+  }
 
   </style>
 </head>
 
 
 <body>
-  <div id="app">
-  <nav>
+  <main id="app">
+  <nav class="blue">
     <div class="nav-wrapper container">
       <div class="brand-logo">Dota Party</div>
       <ul id="nav-mobile" class="right hide-on-med-and-down">
@@ -64,42 +80,55 @@
   <div>
     <div class="container">
     <div class="row">
-      <div class="col s12 m6" v-if="player.profile != null" >
+      <div class="col s12 m12 l6" v-if="player.profile != null" >
         <div class="card horizontal">
           <div class="card-image">
             <img :src="player.profile.avatarfull">
           </div>
           <div class="card-stacked">
             <div class="card-content">
+              <a target="_blank" :href="'https://www.opendota.com/players/' + player.profile.account_id">
               <h2>{{ player.profile.personaname }}</h2>
-              <p>Nothing here yet :(</p>
+              </a>
+
             </div>
           </div>
         </div>
       </div>
-    </div>
-    <div class="row">
-      <div v-for="match in matches" class="col s3">
-        <a href="#" @click="findMatch(match.match_id)">
-          <div class="chip" style="width: 100%; text-align: center">
-            <img :src="'https://api.opendota.com' + getHero(match.hero_id).icon">
-            {{ match.match_id }} {{ match.kills }}/{{ match.deaths }}/{{ match.assists }}
-          </div>
-        </a>
+      <div class="col s12 m12 l6">
+        <div v-for="match in matches"  class="col s6">
+          <button @click="findMatch(match.match_id)" class="waves-effect waves-light btn-large blue accent-1" style="margin-bottom: 5px; width: 100%">
+              <i class="material-icons left" style="margin-top: 4px"><img :src="'https://api.opendota.com' + getHero(match.hero_id).icon"></i>
+              <span>{{ match.kills }}/{{ match.deaths }}/{{ match.assists }}</span>
+          </button>
+        </div>
       </div>
     </div>
     </div>
-    <div id="selectdMatch" v-if="selectedMatch.match_id">
-    <h3 style="text-align: center"> Match {{ selectedMatch.match_id }}</h3>
+    <div id="selectdMatch" v-if="selectedMatch.match_id" class="grey lighten-3">
+    <div class="row">
+    <div class="col s12">
+    <a target="_blank" :href="'https://www.opendota.com/matches/' + selectedMatch.match_id">
+      <h3 class="center-align">
+        {{ selectedMatch.match_id }}
+      </h3>
+      <h6 class="center-align">
+        {{ selectedMatch.radiant_win ? 'Radiant Victory!' : 'Dire Victory!' }}
+      </h6>
+    </a>
+    </div>
+    </div>
+    <div class="row">
+    <div class="col s12">
     <table class="table centered highlight">
       <tbody>
         <tr>
           <td class="col s2"></td>
           <td v-for="player in selectedMatch.players">
         <div>
-          <div class="chip chip-table" :class="cssClass(player)" style="width: 100%; text-align: center">
+          <div class="chip chip-table center-align" :class="cssClass(player)" style="width: 100%">
             <img :src="'https://api.opendota.com' + getHero(player.hero_id).icon">
-            <span>{{ player | asPersona }}</span>
+            <span class="hide-on-med-and-down" >{{ player | asPersona }}</span>
           </div>
         </div>
 
@@ -107,7 +136,7 @@
         </tr>
         <tr v-for="player2 in selectedMatch.players">
           <td>
-            <div class="chip chip-table" :class="cssClass(player2)" style="width: 100%; text-align: center">
+            <div class="chip chip-table center-align" :class="cssClass(player2)" style="width: 100%">
               <img :src="'https://api.opendota.com' + getHero(player2.hero_id).icon">
               <span>{{ player2 | asPersona }}</span>
             </div> 
@@ -121,36 +150,59 @@
       </tbody>
     </table>
     </div>
-    <div id="selectedMatches" class="container">
+    </div>
+    </div>
+    <div id="selectedMatches">
       <div v-if="selectedMatches.length > 0">
+
       <div class="row">
         <div class="col s12">
-          <h3 style="text-align: center">{{ discoverPlayer(selectedPlayers[0]) | asPersona }} X {{ discoverPlayer(selectedPlayers[1]) | asPersona }}</h3>
+          <h3 class="center-align">
+            <a target="_blank" :href="'https://www.opendota.com/players/'+selectedPlayers[0]+'/matches?included_account_id='+ selectedPlayers[1]">
+            {{ discoverPlayer(selectedPlayers[0]) | asPersona }} | {{ discoverPlayer(selectedPlayers[1]) | asPersona }}
+            </a>
+          </h3>
         </div>
       </div>
-      <div class="row">
-        <div v-for="match in selectedMatches" class="col s6">
-          <div class="card">
-            <div class="card-content">
-              <span class="card-title">
-                <a :href="'https://www.opendota.com/matches/' + match.match_id">Match {{ match.match_id }}</a>
-              </span>
-              <div v-for="h in filterPlayers(match)" class="chip chip-table" :class="cssClass(h)" style="width: 100%; text-align: center">
-                <img :src="'https://api.opendota.com' + getHero(h.hero_id).icon">
-                <span>{{ discoverPlayer(h.account_id) | asPersona }}</span>
-                <span style="float: right">{{ determineVictoryLoss(match, h) }}</span>
+      <div class="grey lighten-3">
+        <div class="container">
+        <div class="row">
+          <div v-for="match in selectedMatches.slice(0, 50)" class="col s4">
+            <div class="card">
+              <div class="card-content">
+                <span class="card-title">
+                  <a target="_blank" :href="'https://www.opendota.com/matches/' + match.match_id">{{ match.match_id }}</a>
+                </span>
+                <div v-for="h in filterPlayers(match)" class="chip chip-table center-align" :class="cssClass(h)" style="width: 100%">
+                  <img :src="'https://api.opendota.com' + getHero(h.hero_id).icon">
+                  <span>{{ discoverPlayer(h.account_id) | asPersona }}</span>
+                  <span class="right">{{ determineVictoryLoss(match, h) }}</span>
 
-              </div> 
+                </div> 
+              </div>
             </div>
           </div>
-        </div>
-
+         </div>
+       </div>
         </div>
       </div>
       </div>
     </div>
   </div>
-  </div>    
+  </main>
+<footer class="page-footer blue">
+    <div class="footer-copyright">
+      <div class="container">
+        <div class="col s12 m6">
+          <span class="white-text left">Fully powered by <a class="orange-text text-lighten-3" target="_blank" href="https://www.opendota.com">OpenDota</a> and Valve</span>
+        </div>
+        <div class="col s12 m6 right">
+      Made with <a class="orange-text text-lighten-3" target="_blank" href="http://materializecss.com">Materialize</a> and <a class="orange-text text-lighten-3" target="_blank" href="https://vuejs.org/">Vue.js</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+    
 <script>
 var app = new Vue({
   el: '#app',
@@ -159,11 +211,15 @@ var app = new Vue({
     axios.get("https://api.opendota.com/api/heroStats").then(function(response) {
       _this.heroes = response.data;
     });
+    if (localStorage.getItem('accountId') != null) {
+      this.accountId = localStorage.getItem('accountId');
+      this.accountIdSearch();
+    }
   },
   data: function() {
     return {
-      accountId: '88738111',
-      matchId: '3031179771',    
+      accountId: '',
+      matchId: '',    
       heroes: [],
       player: {},
       matches: [],
@@ -184,6 +240,7 @@ var app = new Vue({
     },
     accountIdSearch: function() {
       this.clean();
+      localStorage.setItem('accountId', this.accountId);
       var _this = this;
       axios.get('https://api.opendota.com/api/players/' + _this.accountId + "/matches?limit=8").then(function(response) {
         response.data.forEach(function(match) {
@@ -274,6 +331,14 @@ var app = new Vue({
     }
   }
 })
+
+$('body').on('mouseover', 'table td', function() {
+    $('table td:nth-child(' + ($(this).index() + 1) + ')').addClass('hover');
+});
+
+$('body').on('mouseleave', 'table td', function() {
+    $('table td:nth-child(' + ($(this).index() + 1) + ')').removeClass('hover');
+});
 
 </script>
 
