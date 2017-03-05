@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <script src="https://unpkg.com/vue"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/0.15.3/axios.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/0.98.0/js/materialize.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/0.98.0/css/materialize.css" />
+  <link href="http://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Dota Party</title>
+
+  <style>
+  input[type="search"] {
+    height: 64px !important; /* or height of nav */
+  }
+
+  .chip-table {
+    font-size: 9px;
+    margin: 0 0 0 0;
+  } 
+
+  .chip-table img {
+    margin: 0 0 0 -12px;
+  } 
+
+  td, th {
+    padding: 0 0 0 0;
+  }
+
+
+  </style>
+</head>
+
+
+<body>
+  <div id="app">
+  <nav>
+    <div class="nav-wrapper container">
+      <div class="brand-logo">Dota Party</div>
+      <ul id="nav-mobile" class="right hide-on-med-and-down">
+        <li>
+          <form @submit.prevent="accountIdSearch">
+            <div class="input-field">
+              <input id="search" type="search" v-model="accountId" placeholder="Account ID">
+              <label class="label-icon" for="search"><i class="material-icons">search</i></label>
+              <i class="material-icons">close</i>
+            </div>
+          </form>
+        </li>
+        <li>
+          <form @submit.prevent="matchIdSearch">
+            <div class="input-field">
+              <input id="search" type="search" v-model="matchId" placeholder="Match ID">
+              <label class="label-icon" for="search"><i class="material-icons">search</i></label>
+              <i class="material-icons">close</i>
+            </div>
+          </form>
+        </li>
+      </ul>
+      
+    </div>
+  </nav>
+  <div>
+    <div class="container">
+    <div class="row">
+      <div class="col s12 m6" v-if="player.profile != null" >
+        <div class="card horizontal">
+          <div class="card-image">
+            <img :src="player.profile.avatarfull">
+          </div>
+          <div class="card-stacked">
+            <div class="card-content">
+              <h2>{{ player.profile.personaname }}</h2>
+              <p>Nothing here yet :(</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="row">
+      <div v-for="match in matches" class="col s3">
+        <a href="#" @click="findMatch(match.match_id)">
+          <div class="chip" style="width: 100%; text-align: center">
+            <img :src="'https://api.opendota.com' + getHero(match.hero_id).icon">
+            {{ match.match_id }} {{ match.kills }}/{{ match.deaths }}/{{ match.assists }}
+          </div>
+        </a>
+      </div>
+    </div>
+    </div>
+    <div id="selectdMatch" v-if="selectedMatch.match_id">
+    <h3 style="text-align: center"> Match {{ selectedMatch.match_id }}</h3>
+    <table class="table centered highlight">
+      <tbody>
+        <tr>
+          <td class="col s2"></td>
+          <td v-for="player in selectedMatch.players">
+        <div>
+          <div class="chip chip-table" :class="cssClass(player)" style="width: 100%; text-align: center">
+            <img :src="'https://api.opendota.com' + getHero(player.hero_id).icon">
+            <span>{{ player | asPersona }}</span>
+          </div>
+        </div>
+
+          </td>
+        </tr>
+        <tr v-for="player2 in selectedMatch.players">
+          <td>
+            <div class="chip chip-table" :class="cssClass(player2)" style="width: 100%; text-align: center">
+              <img :src="'https://api.opendota.com' + getHero(player2.hero_id).icon">
+              <span>{{ player2 | asPersona }}</span>
+            </div> 
+          </td>
+          <td v-for="player1 in selectedMatch.players">
+            <a href="#" @click="selectedMatchesBetween(player1, player2)"> 
+              {{ matchesBetween(player1, player2) }}
+            </a>
+         </td>
+        </tr>
+      </tbody>
+    </table>
+    </div>
+    <div id="selectedMatches" class="container">
+      <div v-if="selectedMatches.length > 0">
+      <div class="row">
+        <div class="col s12">
+          <h3 style="text-align: center">{{ discoverPlayer(selectedPlayers[0]) | asPersona }} X {{ discoverPlayer(selectedPlayers[1]) | asPersona }}</h3>
+        </div>
+      </div>
+      <div class="row">
+        <div v-for="match in selectedMatches" class="col s6">
+          <div class="card">
+            <div class="card-content">
+              <span class="card-title">
+                <a :href="'https://www.opendota.com/matches/' + match.match_id">Match {{ match.match_id }}</a>
+              </span>
+              <div v-for="h in filterPlayers(match)" class="chip chip-table" :class="cssClass(h)" style="width: 100%; text-align: center">
+                <img :src="'https://api.opendota.com' + getHero(h.hero_id).icon">
+                <span>{{ discoverPlayer(h.account_id) | asPersona }}</span>
+                <span style="float: right">{{ determineVictoryLoss(match, h) }}</span>
+
+              </div> 
+            </div>
+          </div>
+        </div>
+
+        </div>
+      </div>
+      </div>
+    </div>
+  </div>
+  </div>    
+<script>
+var app = new Vue({
+  el: '#app',
+  created: function() {
+    var _this = this;
+    axios.get("https://api.opendota.com/api/heroStats").then(function(response) {
+      _this.heroes = response.data;
+    });
+  },
+  data: function() {
+    return {
+      accountId: '88738111',
+      matchId: '3031179771',    
+      heroes: [],
+      player: {},
+      matches: [],
+      selectedMatch: {},
+      selectedMatches: [],
+      selectedPlayers: [],
+      crossFight: {}
+    }
+  }, 
+  methods: {
+    clean: function() {
+      this.player = {};
+      this.matches = [];
+      this.selectedMatch = {};
+      this.selectedMatches = [];
+      this.selectedPlayers = [];
+      this.crossFight = {};
+    },
+    accountIdSearch: function() {
+      this.clean();
+      var _this = this;
+      axios.get('https://api.opendota.com/api/players/' + _this.accountId + "/matches?limit=8").then(function(response) {
+        response.data.forEach(function(match) {
+          _this.matches.push(match);
+        });
+      });
+      axios.get('https://api.opendota.com/api/players/' + _this.accountId + "/").then(function(response) {
+        _this.player = response.data;
+      });
+    },
+    matchIdSearch: function() {
+      this.clean();
+      this.findMatch(this.matchId);
+    },
+    findMatch: function(matchId)  {
+      var _this = this;
+      axios.get('https://api.opendota.com/api/matches/' + matchId).then(function(response) {
+        _this.selectedMatch = response.data;
+        
+        _this.selectedMatch.players.forEach(function(player1) {
+          if (player1.account_id != null)
+            _this.selectedMatch.players.forEach(function(player2) {
+              if (player2.account_id == null)
+                return;
+              if (player1.account_id == player2.account_id )
+                return;
+              if (_this.selectedMatch.players.indexOf(player1) <= _this.selectedMatch.players.indexOf(player2))
+                return;
+              
+              axios.get("https://api.opendota.com/api/players/" + player1.account_id + "/matches?included_account_id=" + player2.account_id).then(function(response) {
+                Vue.set(_this.crossFight, player1.account_id + " " + player2.account_id, response.data);
+                Vue.set(_this.crossFight, player2.account_id + " " + player1.account_id, response.data);
+              });
+          });
+        });
+      });
+    },
+    matchesBetween: function(p1, p2) {
+      var games = this.crossFight[p1.account_id + " " + p2.account_id];
+      if (games != null)
+        return games.length;
+      return '';
+    },
+    getHero: function(heroId) {
+      return this.heroes.filter(function (hero) {
+        return hero.id == heroId;
+      })[0];
+    },
+    cssClass: function(player) {
+      return { 
+        'green lighten-4': player.player_slot < 10,
+        'red lighten-4': player.player_slot > 10
+      }
+    },
+    selectedMatchesBetween: function(p1, p2) {
+      this.selectedPlayers = [ p1.account_id, p2.account_id];
+      this.selectedMatches = this.crossFight[p1.account_id + " " + p2.account_id];
+      $('html, body').animate({
+        scrollTop: $('#selectedMatches').offset().top
+      }, 500);
+    },
+    filterPlayers: function(match) {
+      var ps = []
+      for (var p in match.heroes) {
+        if (this.selectedPlayers.indexOf(match.heroes[p].account_id) >= 0)
+          ps.push(match.heroes[p]);
+      }
+      console.log(ps);
+      return ps;
+    },
+    discoverPlayer: function(accountId) {
+       return this.selectedMatch.players.filter(function(p) {
+         return p.account_id == accountId;
+       })[0];
+    },
+    determineVictoryLoss: function(match, hero) {
+      if (hero.player_slot < 10 && match.radiant_win)
+        return 'Victory!'
+      if (hero.player_slot > 10 && !match.radiant_win)
+        return 'Victory!'
+
+      return 'Loss!'
+    }
+  },
+  filters: {
+    asPersona: function(player) {
+      return player.personaname == null ? 'unknown' : player.personaname;
+    }
+  }
+})
+
+</script>
+
+</body>
+
+
+</html>
