@@ -373,7 +373,7 @@ var app = new Vue({
   },
   filters: {
     asPersona: function(player) {
-      return player.personaname == null ? 'unknown' : player.personaname;
+      return ('personaname' in player) ? player.personaname : 'unknown';
     }
   }
 })
