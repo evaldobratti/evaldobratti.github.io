@@ -114,33 +114,32 @@
     <div id="selectdMatch" v-if="selectedMatch.match_id" class="grey lighten-3">
     <div class="row">
     <div class="col s12">
-    <a target="_blank" :href="'https://www.opendota.com/matches/' + selectedMatch.match_id">
-      <h3 class="center-align">
+    <h3 class="center-align">
+      <a target="_blank" :href="'https://www.opendota.com/matches/' + selectedMatch.match_id">
         {{ selectedMatch.match_id }}
-      </h3>
-      <h6 class="center-align">
-        {{ selectedMatch.radiant_win ? 'Radiant Victory!' : 'Dire Victory!' }}
-      </h6>
-    </a>
+      </a>
+    </h3>
+    <h6 class="center-align">
+      {{ selectedMatch.radiant_win ? 'Radiant Victory!' : 'Dire Victory!' }}
+    </h6>
     </div>
     </div>
     <div class="row">
     <div class="col s12">
-    <table class="table centered highlight">
+    <table class="table centered striped highlight">
       <tbody>
         <tr>
           <td class="col s2"></td>
           <td v-for="player in selectedMatch.players">
-        <div>
-          <div class="chip chip-table center-align" :class="cssClass(player)" style="width: 100%">
-            <img :src="'https://api.opendota.com' + getHero(player.hero_id).icon">
-            <span class="hide-on-med-and-down" >{{ player | asPersona }}</span>
-          </div>
-        </div>
-
+            <div>
+              <div class="chip chip-table center-align" :class="activeCssClass(player)" @click="loadCrossFight(player)" style="width: 100%">
+                <img :src="'https://api.opendota.com' + getHero(player.hero_id).icon">
+                <span class="hide-on-med-and-down" >{{ player | asPersona }}</span>
+              </div>
+            </div>
           </td>
         </tr>
-        <tr v-for="player2 in selectedMatch.players">
+        <tr v-for="player2 in crossPlayersToShow">
           <td>
             <div class="chip chip-table center-align" :class="cssClass(player2)" style="width: 100%">
               <img :src="'https://api.opendota.com' + getHero(player2.hero_id).icon">
@@ -148,24 +147,24 @@
             </div> 
           </td>
           <td v-for="player1 in selectedMatch.players">
-            <a href="#" @click="selectedMatchesBetween(player1, player2)"> 
+            <a href="#" @click="setCrossMatchesBetween(player1, player2)"> 
               {{ matchesBetween(player1, player2) }}
             </a>
-         </td>
+          </td>
         </tr>
       </tbody>
     </table>
     </div>
     </div>
     </div>
-    <div id="selectedMatches">
-      <div v-if="selectedMatches.length > 0">
+    <div id="crossMatches">
+      <div v-if="crossMatches.length > 0">
 
       <div class="row">
         <div class="col s12">
           <h3 class="center-align">
-            <a target="_blank" :href="'https://www.opendota.com/players/'+selectedPlayers[0]+'/matches?included_account_id='+ selectedPlayers[1]">
-            {{ discoverPlayer(selectedPlayers[0]) | asPersona }} | {{ discoverPlayer(selectedPlayers[1]) | asPersona }}
+            <a target="_blank" :href="'https://www.opendota.com/players/'+crossPlayers[0]+'/matches?included_account_id='+ crossPlayers[1]">
+            {{ discoverPlayer(crossPlayers[0]) | asPersona }} | {{ discoverPlayer(crossPlayers[1]) | asPersona }}
             </a>
           </h3>
         </div>
@@ -173,7 +172,7 @@
       <div class="grey lighten-3">
         <div class="container">
         <div class="row">
-          <div v-for="match in selectedMatches.slice(0, 50)" class="col s4">
+          <div v-for="match in crossMatches.slice(0, 50)" class="col s4">
             <div class="card">
               <div class="card-content">
                 <span class="card-title">
@@ -183,7 +182,6 @@
                   <img :src="'https://api.opendota.com' + getHero(h.hero_id).icon">
                   <span>{{ discoverPlayer(h.account_id) | asPersona }}</span>
                   <span class="right">{{ determineVictoryLoss(match, h) }}</span>
-
                 </div> 
               </div>
             </div>
@@ -255,8 +253,9 @@ var app = new Vue({
       player: {},
       matches: [],
       selectedMatch: {},
-      selectedMatches: [],
-      selectedPlayers: [],
+      crossMatches: [],
+      crossPlayers: [],
+      crossPlayersToShow: [],
       crossFight: {},
       queue: {}
     }
@@ -267,8 +266,9 @@ var app = new Vue({
       this.player = {};
       this.matches = [];
       this.selectedMatch = {};
-      this.selectedMatches = [];
-      this.selectedPlayers = [];
+      this.crossMatches = [];
+      this.crossPlayers = [];
+      this.crossPlayersToShow = [];
       this.crossFight = {};
     },
     accountIdSearch: function() {
@@ -302,26 +302,42 @@ var app = new Vue({
       var _this = this;
       axios.get('https://api.opendota.com/api/matches/' + matchId).then(function(response) {
         _this.selectedMatch = response.data;
-        
-        _this.selectedMatch.players.forEach(function(player1) {
-          if (player1.account_id != null)
-            _this.selectedMatch.players.forEach(function(player2) {
-              if (player2.account_id == null)
-                return;
-              if (player1.account_id == player2.account_id )
-                return;
-              if (_this.selectedMatch.players.indexOf(player1) <= _this.selectedMatch.players.indexOf(player2))
-                return;
+        _this.crossPlayers = [];
+        _this.crossPlayersToShow = [];
+        var playersToLoad = [];
+        if ('profile' in _this.player){
+          playersToLoad = response.data.players.filter(function(p) { return p.account_id == _this.player.profile.account_id });
+        } else {
+          playersToLoad = response.data.players;
+        }
+        playersToLoad.map(_this.loadCrossFight);
+      });
+    },
+    loadCrossFight: function(player){
+      var _this = this;
+      if (player.account_id == null)
+        return;
+      if (_this.crossPlayersToShow.indexOf(player) >= 0)
+        return;
 
-              _this.queue.push(function(cb) {
-                axios.get("https://api.opendota.com/api/players/" + player1.account_id + "/matches?included_account_id=" + player2.account_id).then(function(response) {
-                  Vue.set(_this.crossFight, player1.account_id + " " + player2.account_id, response.data);
-                  Vue.set(_this.crossFight, player2.account_id + " " + player1.account_id, response.data);
-                  cb();
-                });
-             });
+      _this.crossPlayersToShow.push(player);
+      
+      _this.crossPlayersToShow = _this.crossPlayersToShow.sort(function(p1, p2) { return  p1.player_slot - p2.player_slot; });
+      _this.selectedMatch.players.forEach(function(otherPlayer) {
+        if (otherPlayer.account_id == null)
+          return;
+        if (player.account_id == otherPlayer.account_id)
+          return;
+        if (_this.crossFight[player.account_id + " " + otherPlayer.account_id] != null)
+          return;
+
+        _this.queue.push(function(cb) {
+          axios.get("https://api.opendota.com/api/players/" + player.account_id + "/matches?included_account_id=" + otherPlayer.account_id).then(function(response) {
+            Vue.set(_this.crossFight, player.account_id + " " + otherPlayer.account_id, response.data);
+            Vue.set(_this.crossFight, otherPlayer.account_id + " " + player.account_id, response.data);
+            cb();
           });
-        });
+         });
       });
     },
     matchesBetween: function(p1, p2) {
@@ -341,20 +357,27 @@ var app = new Vue({
         'red lighten-4': player.player_slot > 10
       }
     },
-    selectedMatchesBetween: function(p1, p2) {
-      this.selectedPlayers = [ p1.account_id, p2.account_id];
-      this.selectedMatches = this.crossFight[p1.account_id + " " + p2.account_id];
+    activeCssClass: function(player) {
+      return {
+        'green': player.player_slot < 10,
+        'red': player.player_slot > 10,
+        'lighten-4': this.crossPlayersToShow.indexOf(player) >= 0 || player.account_id == null,
+        'btn': this.crossPlayersToShow.indexOf(player) < 0 && player.account_id != null
+      }
+    },
+    setCrossMatchesBetween: function(p1, p2) {
+      this.crossPlayers = [ p1.account_id, p2.account_id];
+      this.crossMatches = this.crossFight[p1.account_id + " " + p2.account_id];
       $('html, body').animate({
-        scrollTop: $('#selectedMatches').offset().top
+        scrollTop: $('#crossMatches').offset().top
       }, 500);
     },
     filterPlayers: function(match) {
       var ps = []
       for (var p in match.heroes) {
-        if (this.selectedPlayers.indexOf(match.heroes[p].account_id) >= 0)
+        if (this.crossPlayers.indexOf(match.heroes[p].account_id) >= 0)
           ps.push(match.heroes[p]);
       }
-      console.log(ps);
       return ps;
     },
     discoverPlayer: function(accountId) {
@@ -369,6 +392,12 @@ var app = new Vue({
         return 'Victory!'
 
       return 'Loss!'
+    },
+    playersToShow: function(players) {
+      var _this = this;
+      if ('profile' in _this.player)
+        return players.filter(function(p) { return p.account_id ==  _this.player.profile.account_id});
+      return players;
     }
   },
   filters: {
