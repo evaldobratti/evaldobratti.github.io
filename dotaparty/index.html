@@ -123,7 +123,7 @@
       </div>
     </div>
     </div>
-    <div id="selectdMatch" v-if="selectedMatch.match_id" class="grey lighten-3">
+    <div id="selectedMatch" v-if="selectedMatch.match_id" class="grey lighten-3">
     <div class="row">
     <div class="col s12">
     <h3 class="center-align">
@@ -134,6 +134,9 @@
     <h6 class="center-align">
       {{ selectedMatch.radiant_win ? 'Radiant Victory!' : 'Dire Victory!' }}
     </h6>
+    <h6 class="center-align">
+      {{ selectedMatch.start_time | asDateString }} {{ selectedMatch.start_time | asTimeString }}
+    </h6>
     </div>
     </div>
     <div class="row">
@@ -143,10 +146,14 @@
     <table class="table centered striped highlight">
       <tbody>
         <tr>
-          <td class="col s2"></td>
+          <td>
+            <div class="chip chip-table center-align btn" @click="selectedMatch.players.map(loadCrossFight)" style="width: 100%">
+              <span>Load all</span>
+            </div>
+          </td>
           <td v-for="player in selectedMatch.players">
             <div>
-              <div class="chip chip-table center-align" :class="chipHeaderCssClass(player)" @click="loadCrossFight(player)" style="width: 100%">
+              <div class="chip chip-table center-align" :class="chipHeaderCssClass(player)" @click="actionCrossFight(player)" style="width: 100%">
                 <img :src="'https://api.opendota.com' + getHero(player.hero_id).icon">
                 <span class="hide-on-med-and-down" >{{ player | asPersona }}</span>
               </div>
@@ -155,7 +162,7 @@
         </tr>
         <tr v-for="player2 in crossPlayersToShow">
           <td>
-            <div class="chip chip-table center-align" :class="chipRowcssClass(player2)" @click="removeCrossFight(player2)" style="width: 100%">
+            <div class="chip chip-table center-align" :class="cssClass(player2)" style="width: 100%">
               <img :src="'https://api.opendota.com' + getHero(player2.hero_id).icon">
               <span>{{ player2 | asPersona }}</span>
             </div> 
@@ -193,8 +200,15 @@
             <div class="card grey lighten-4">
               <div class="card-content">
                 <span class="card-title">
-                  <a target="_blank" :href="'https://www.opendota.com/matches/' + match.match_id">{{ match.match_id }}</a>
-                  <small class="right">{{ match.start_time | asDateString }}</small>
+                  <a href="#" @click="findMatch(match.match_id, crossPlayers)">{{ match.match_id }}</a>
+                    <small class="right">
+                    <span>
+                      {{ match.start_time | asDateString }}
+                    </span>
+                    <span class="hide-on-med-and-down">
+                      {{ match.start_time | asTimeString }}
+                    </span>
+                    </small>
                   <div class="divider"></div>
                 </span>
 
@@ -283,8 +297,6 @@ var app = new Vue({
   methods: {
     clean: function() {
       this.error = '';
-      this.player = {};
-      this.matches = [];
       this.selectedMatch = {};
       this.crossMatches = [];
       this.crossPlayers = [];
@@ -318,19 +330,28 @@ var app = new Vue({
       this.clean();
       this.findMatch(this.matchId);
     },
-    findMatch: function(matchId)  {
+    findMatch: function(matchId, accountsToShow)  {
       var _this = this;
+      var accs = accountsToShow || (('profile' in this.player) ? [ this.player.profile.account_id ]: [] );
+
       axios.get('https://api.opendota.com/api/matches/' + matchId).then(function(response) {
         _this.selectedMatch = response.data;
+        _this.crossMatches = [];
         _this.crossPlayers = [];
         _this.crossPlayersToShow = [];
         var playersToLoad = [];
-        if ('profile' in _this.player){
-          playersToLoad = response.data.players.filter(function(p) { return p.account_id == _this.player.profile.account_id });
-        } else {
+        if (accs.length > 0){
+          playersToLoad = response.data.players.filter(function(p) { return accs.indexOf(p.account_id) >= 0; });
+
+        } 
+        if (playersToLoad.length == 0) {
           playersToLoad = response.data.players;
         }
         playersToLoad.map(_this.loadCrossFight);
+
+        $('html, body').animate({
+          scrollTop: $('#selectedMatch').offset().top
+        }, 500);
       });
     },
     loadCrossFight: function(player){
@@ -339,7 +360,7 @@ var app = new Vue({
       if (_this.crossPlayersToShow.indexOf(player) >= 0)
         return;
 
-      if (this.player.profile != null && player.account_id == null)
+      if (player.account_id == null)
         return;
 
       _this.crossPlayersToShow.push(player);
@@ -367,10 +388,13 @@ var app = new Vue({
       });
     },
     removeCrossFight: function(player) {
-      if (player.account_id == this.player.profile.account_id)
-        return;
-
       this.crossPlayersToShow.splice(this.crossPlayersToShow.indexOf(player), 1);
+    },
+    actionCrossFight: function(player) {
+      if (this.crossPlayersToShow.indexOf(player) >= 0)
+        this.removeCrossFight(player);
+      else
+        this.loadCrossFight(player);
     },
     matchesBetween: function(p1, p2) {
       var games = this.crossFight[p1.account_id + " " + p2.account_id];
@@ -393,16 +417,8 @@ var app = new Vue({
       return {
         'green': player.player_slot < 10,
         'red': player.player_slot > 10,
-        'lighten-4': this.crossPlayersToShow.indexOf(player) >= 0 || player.account_id == null,
-        'btn': this.crossPlayersToShow.indexOf(player) < 0 && player.account_id != null
-      }
-    },
-    chipRowcssClass: function(player) {
-      return {
-        'green': player.player_slot < 10,
-        'red': player.player_slot > 10,
-        'btn': this.player.profile != null && player.account_id != this.player.profile.account_id,
-        'lighten-4': this.player.profile == null || player.account_id == this.player.profile.account_id
+        'lighten-4': player.account_id == null,
+        'btn': true
       }
     },
     setCrossMatchesBetween: function(p1, p2) {
@@ -447,7 +463,12 @@ var app = new Vue({
     asDateString: function(seconds) {
       var d = new Date(0);
       d.setUTCSeconds(seconds);
-      return d.toLocaleString();
+      return d.toLocaleDateString();
+    },
+    asTimeString: function(seconds) {
+      var d = new Date(0);
+      d.setUTCSeconds(seconds);
+      return d.toLocaleTimeString();
     }
   }
 })
