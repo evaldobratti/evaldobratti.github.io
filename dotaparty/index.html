@@ -5,6 +5,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/0.15.3/axios.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/0.98.0/js/materialize.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/async/2.1.5/async.min.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/0.98.0/css/materialize.css" />
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
@@ -77,8 +78,10 @@
     </div>
   </nav>
 
-  <div :class="{ progress: loading > 0}">
-      <div class="indeterminate"></div>
+  <div style="height: 50px">
+    <div class="blue lighten-3" :class="{ progress: loading > 0}">
+        <div class="blue indeterminate"></div>
+    </div>
   </div>
   <div>
     <div class="container">
@@ -193,13 +196,15 @@
     </div>
   </div>
   </main>
-<footer class="page-footer blue">
+  <footer class="page-footer blue">
     <div class="footer-copyright">
       <div class="container">
-        <div class="col s12 m6">
-          <span class="white-text left">Fully powered by <a class="orange-text text-lighten-3" target="_blank" href="https://www.opendota.com">OpenDota</a> and Valve</span>
+        <div class="col s12 m8">
+          <span class="white-text left">
+          The site may seem slow, but we are respecting 1 request per sec as OpenDota asks us. <br>
+          Fully powered by <a class="orange-text text-lighten-3" target="_blank" href="https://www.opendota.com">OpenDota</a> and Valve</span>
         </div>
-        <div class="col s12 m6 right">
+        <div class="col s12 m4 right">
       Made with <a class="orange-text text-lighten-3" target="_blank" href="http://materializecss.com">Materialize</a> and <a class="orange-text text-lighten-3" target="_blank" href="https://vuejs.org/">Vue.js</a>
         </div>
       </div>
@@ -211,9 +216,17 @@ var app = new Vue({
   el: '#app',
   created: function() {
     var _this = this;
-    axios.get("https://api.opendota.com/api/heroStats").then(function(response) {
-      _this.heroes = response.data;
+    this.queue = async.queue(function(task, cb) {
+      setTimeout(function() { task(cb) }, 1000);   
     });
+
+    this.queue.push(function(cb){
+      axios.get("https://api.opendota.com/api/heroStats").then(function(response) {
+        _this.heroes = response.data;
+        cb();
+      });
+    });
+
     if (localStorage.getItem('accountId') != null) {
       this.accountId = localStorage.getItem('accountId');
       this.accountIdSearch();
@@ -244,7 +257,8 @@ var app = new Vue({
       selectedMatch: {},
       selectedMatches: [],
       selectedPlayers: [],
-      crossFight: {}
+      crossFight: {},
+      queue: {}
     }
   }, 
   methods: {
@@ -261,14 +275,24 @@ var app = new Vue({
       this.clean();
       localStorage.setItem('accountId', this.accountId);
       var _this = this;
-      axios.get('https://api.opendota.com/api/players/' + _this.accountId + "/matches?limit=8").then(function(response) {
-        response.data.forEach(function(match) {
-          _this.matches.push(match);
+      var tasks = [];
+
+      this.queue.push(function(cb){
+        axios.get('https://api.opendota.com/api/players/' + _this.accountId + "/").then(function(response) {
+          _this.player = response.data;
+          cb();
+        });  
+      })
+
+      this.queue.push(function(cb) { 
+        axios.get('https://api.opendota.com/api/players/' + _this.accountId + "/matches?limit=8").then(function(response) {
+          async.each(response.data, function(match, cb) {
+            _this.matches.push(match);
+            cb();
+          }, cb);
         });
       });
-      axios.get('https://api.opendota.com/api/players/' + _this.accountId + "/").then(function(response) {
-        _this.player = response.data;
-      });
+
     },
     matchIdSearch: function() {
       this.clean();
@@ -288,11 +312,14 @@ var app = new Vue({
                 return;
               if (_this.selectedMatch.players.indexOf(player1) <= _this.selectedMatch.players.indexOf(player2))
                 return;
-              
-              axios.get("https://api.opendota.com/api/players/" + player1.account_id + "/matches?included_account_id=" + player2.account_id).then(function(response) {
-                Vue.set(_this.crossFight, player1.account_id + " " + player2.account_id, response.data);
-                Vue.set(_this.crossFight, player2.account_id + " " + player1.account_id, response.data);
-              });
+
+              _this.queue.push(function(cb) {
+                axios.get("https://api.opendota.com/api/players/" + player1.account_id + "/matches?included_account_id=" + player2.account_id).then(function(response) {
+                  Vue.set(_this.crossFight, player1.account_id + " " + player2.account_id, response.data);
+                  Vue.set(_this.crossFight, player2.account_id + " " + player1.account_id, response.data);
+                  cb();
+                });
+             });
           });
         });
       });
