@@ -339,6 +339,9 @@ var app = new Vue({
       if (_this.crossPlayersToShow.indexOf(player) >= 0)
         return;
 
+      if (this.player.profile != null && player.account_id == null)
+        return;
+
       _this.crossPlayersToShow.push(player);
       
       _this.crossPlayersToShow = _this.crossPlayersToShow.sort(function(p1, p2) { return  p1.player_slot - p2.player_slot; });
@@ -449,13 +452,13 @@ var app = new Vue({
   }
 })
 
-$('body').on('mouseover', 'table td', function() {
+/*$('body').on('mouseover', 'table td', function() {
     $('table td:nth-child(' + ($(this).index() + 1) + ')').addClass('hover');
 });
 
 $('body').on('mouseleave', 'table td', function() {
     $('table td:nth-child(' + ($(this).index() + 1) + ')').removeClass('hover');
-});
+});*/
 
 </script>
 
