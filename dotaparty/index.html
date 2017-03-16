@@ -1,11 +1,14 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <!--python -m SimpleHTTPServer 8000 -->
   <script src="https://unpkg.com/vue"></script>
+  <script src="https://unpkg.com/vuex@2.0.0"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/0.15.3/axios.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/0.98.0/js/materialize.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/async/2.1.5/async.min.js"></script>
+  
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/0.98.0/css/materialize.css" />
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
@@ -63,6 +66,55 @@
 
 
 <body>
+  <script type="text/x-template" id="chip-hero"> 
+    <div class="chip chip-table center-align" :class="cssClass" @click="click" style="width: 100%">
+      <img :src="image">
+      <span>{{ persona }}</span>
+    </div>
+  </script>
+
+  <script type="text/javascript">
+lastRequest = new Date();
+
+var queue = async.queue(function(task, cb) {
+  var now = new Date();
+
+  var toWait = lastRequest.getTime() - now.getTime() + 1000;
+  lastRequest = now;
+
+  setTimeout(function() { task(cb) }, toWait);   
+});
+
+store = new Vuex.Store({
+  state: {
+    heroes: []
+  },
+  mutations: {
+    setHeroes: function(state, heroes) {
+      state.heroes = heroes;
+    }
+  },
+  getters: {
+    getHero: function(state) {
+      return function(heroId) {
+        return state.heroes.find(function(h) { return h.hero_id = heroId });
+      };
+    }
+  },
+  actions: {
+    updateHeroes: function(context) {
+      queue.push(function(cb){
+        axios.get('https://api.opendota.com/api/heroStats').then(function(response) {
+          context.commit('setHeroes', response.data);
+          cb();
+        });
+      });
+    }
+  }
+});
+
+  </script>  
+
   <main id="app">
   <nav class="blue">
     <div class="nav-wrapper container">
@@ -170,6 +222,8 @@
       <tbody>
       <tr>
           <td>
+
+
             <div class="chip chip-table center-align btn" @click="selectedMatch.players.map(loadCrossFight)" style="width: 100%">
               <span>Load all</span>
             </div>
@@ -270,8 +324,10 @@
   </footer>
     
 <script>
+Vue.config.debug = true;
 var app = new Vue({
   el: '#app',
+  store: store, 
   created: function() {
     var vm = this;
     this.queue = async.queue(function(task, cb) {
