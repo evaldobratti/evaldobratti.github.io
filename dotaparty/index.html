@@ -8,7 +8,9 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/0.98.0/js/materialize.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/async/2.1.5/async.min.js"></script>
-  
+  <script src="store.js"></script>
+  <script src="queue.js"></script>
+  <script src="util.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/0.98.0/css/materialize.css" />
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
@@ -72,48 +74,6 @@
       <span>{{ persona }}</span>
     </div>
   </script>
-
-  <script type="text/javascript">
-lastRequest = new Date();
-
-var queue = async.queue(function(task, cb) {
-  var now = new Date();
-
-  var toWait = lastRequest.getTime() - now.getTime() + 1000;
-  lastRequest = now;
-
-  setTimeout(function() { task(cb) }, toWait);   
-});
-
-store = new Vuex.Store({
-  state: {
-    heroes: []
-  },
-  mutations: {
-    setHeroes: function(state, heroes) {
-      state.heroes = heroes;
-    }
-  },
-  getters: {
-    getHero: function(state) {
-      return function(heroId) {
-        return state.heroes.find(function(h) { return h.hero_id = heroId });
-      };
-    }
-  },
-  actions: {
-    updateHeroes: function(context) {
-      queue.push(function(cb){
-        axios.get('https://api.opendota.com/api/heroStats').then(function(response) {
-          context.commit('setHeroes', response.data);
-          cb();
-        });
-      });
-    }
-  }
-});
-
-  </script>  
 
   <main id="app">
   <nav class="blue">
@@ -324,32 +284,18 @@ store = new Vuex.Store({
   </footer>
     
 <script>
-Vue.config.debug = true;
 var app = new Vue({
   el: '#app',
   store: store, 
   created: function() {
     var vm = this;
-    this.queue = async.queue(function(task, cb) {
-      var now = new Date();
-
-      var toWait = vm.lastRequest.getTime() - now.getTime() + 1000;
-      vm.lastRequest = now;
-
-      setTimeout(function() { task(cb) }, toWait);   
-    });
-
-    this.queue.push(function(cb){
-      axios.get("https://api.opendota.com/api/heroStats").then(function(response) {
-        vm.heroes = response.data;
-        cb();
-      });
-    });
+    vm.$store.dispatch('updateHeroes');
 
     if (localStorage.getItem('accountId') != null) {
-      this.accountId = localStorage.getItem('accountId');
-      this.accountIdSearch();
+      vm.accountId = localStorage.getItem('accountId');
+      vm.accountIdSearch();
     }
+
     axios.interceptors.request.use(function(config) {
       vm.loading += 1;;
       return config;
@@ -360,7 +306,7 @@ var app = new Vue({
     }, function(error){
       vm.loading -= 1;
       vm.error = error;
-      return error;
+      return Promise.reject(error);
     });;
 
   },
@@ -372,8 +318,6 @@ var app = new Vue({
       accountId: '',
       matchId: '',    
       heroes: [],
-      player: {},
-      matches: [],
       selectedMatch: {},
       crossMatches: [],
       crossPlayers: [],
@@ -382,6 +326,14 @@ var app = new Vue({
       queue: {}
     }
   }, 
+  computed: {
+    player: function() {
+      return this.$store.getters.getCurrentPlayer;
+    },
+    matches: function() {
+      return this.$store.getters.getCurrentPlayerGames;
+    }
+  },
   methods: {
     clean: function() {
       this.error = '';
@@ -392,27 +344,7 @@ var app = new Vue({
       this.crossFight = {};
     },
     accountIdSearch: function() {
-      this.clean();
-      localStorage.setItem('accountId', this.accountId);
-      var vm = this;
-      var tasks = [];
-
-      this.queue.push(function(cb){
-        axios.get('https://api.opendota.com/api/players/' + vm.accountId + "/").then(function(response) {
-          vm.player = response.data;
-          cb();
-        });  
-      })
-
-      this.queue.push(function(cb) { 
-        axios.get('https://api.opendota.com/api/players/' + vm.accountId + "/matches?limit=8").then(function(response) {
-          vm.matches = [];
-          async.each(response.data, function(match, cb) {
-            vm.matches.push(match);
-            cb();
-          }, cb);
-        });
-      });
+      this.$store.dispatch('updateCurrentPlayer', this.accountId);
       $('.button-collapse').sideNav('hide');
 
     },
@@ -511,9 +443,7 @@ var app = new Vue({
       return '';
     },
     getHero: function(heroId) {
-      return this.heroes.find(function (hero) {
-        return hero.id == heroId;
-      });
+      return this.$store.getters.getHero(heroId);
     },
     cssClass: function(player) {
       return { 
