@@ -307,7 +307,7 @@ var app = new Vue({
       vm.loading -= 1;
       vm.error = error;
       return Promise.reject(error);
-    });;
+    });
 
   },
   data: function() {
@@ -318,10 +318,8 @@ var app = new Vue({
       accountId: '',
       matchId: '',    
       heroes: [],
-      selectedMatch: {},
       crossMatches: [],
       crossPlayers: [],
-      crossPlayersToShow: [],
       crossFight: {},
       queue: {}
     }
@@ -332,15 +330,19 @@ var app = new Vue({
     },
     matches: function() {
       return this.$store.getters.getCurrentPlayerGames;
+    },
+    selectedMatch: function() {
+      return this.$store.getters.getSelectedMatch;
+    },
+    crossPlayersToShow: function() {
+      return this.$store.getters.getSelectedPlayers;
     }
   },
   methods: {
     clean: function() {
       this.error = '';
-      this.selectedMatch = {};
       this.crossMatches = [];
       this.crossPlayers = [];
-      this.crossPlayersToShow = [];
       this.crossFight = {};
     },
     accountIdSearch: function() {
@@ -357,58 +359,11 @@ var app = new Vue({
       var vm = this;
       var accs = accountsToShow || (('profile' in this.player) ? [ this.player.profile.account_id ]: [] );
 
-      axios.get('https://api.opendota.com/api/matches/' + matchId).then(function(response) {
-        vm.selectedMatch = response.data;
-        vm.crossMatches = [];
-        vm.crossPlayers = [];
-        vm.crossPlayersToShow = [];
-        var playersToLoad = [];
-        if (accs.length > 0){
-          playersToLoad = response.data.players.filter(function(p) { return accs.indexOf(p.account_id) >= 0; });
+      vm.$store.dispatch('loadMatch', matchId);
 
-        } 
-        if (playersToLoad.length == 0) {
-          playersToLoad = response.data.players;
-        }
-        playersToLoad.map(vm.loadCrossFight);
-
-        $('html, body').animate({
-          scrollTop: $('#selectedMatch').offset().top
-        }, 500);
-      });
-    },
-    loadCrossFight: function(player){
-      var vm = this;
-
-      if (vm.crossPlayersToShow.indexOf(player) >= 0)
-        return;
-
-      if (player.account_id == null)
-        return;
-
-      vm.crossPlayersToShow.push(player);
-      
-      vm.crossPlayersToShow = vm.crossPlayersToShow.sort(function(p1, p2) { return  p1.player_slot - p2.player_slot; });
-
-      if (player.account_id == null)
-        return;
-
-      vm.selectedMatch.players.forEach(function(otherPlayer) {
-        if (otherPlayer.account_id == null)
-          return;
-        if (player.account_id == otherPlayer.account_id)
-          return;
-        if (vm.crossFight[player.account_id + " " + otherPlayer.account_id] != null)
-          return;
-
-        vm.queue.push(function(cb) {
-          axios.get("https://api.opendota.com/api/players/" + player.account_id + "/matches?included_account_id=" + otherPlayer.account_id).then(function(response) {
-            Vue.set(vm.crossFight, player.account_id + " " + otherPlayer.account_id, response.data);
-            Vue.set(vm.crossFight, otherPlayer.account_id + " " + player.account_id, response.data);
-            cb();
-          });
-         });
-      });
+      $('html, body').animate({
+        scrollTop: $('#selectedMatch').offset().top
+      }, 500);
     },
     removeCrossFight: function(player) {
       this.crossPlayersToShow.splice(this.crossPlayersToShow.indexOf(player), 1);
@@ -420,27 +375,11 @@ var app = new Vue({
         this.loadCrossFight(player);
     },
     matchesBetween: function(p1, p2) {
-      var vm = this;
-      var games = this.crossFight[p1.account_id + " " + p2.account_id];
-      if (games != null) {
-         vm.$nextTick(function () {
-          if ($('#c' + p1.account_id + p2.account_id).attr('data-tooltip'))
-            return;
-          
-          $('#c' + p1.account_id + p2.account_id).attr('data-tooltip', '\'' + vm.$options.filters.asPersona(vm.discoverPlayer(p2.account_id)) + '\' and \'' + vm.$options.filters.asPersona(vm.discoverPlayer(p1.account_id)) +
-            '\' have ' + games.length + ' match' + (games.length > 1 ? 'es' : '') + ' together');
-
-          $('#c' + p1.account_id + p2.account_id).tooltip({
-            delay: 50
-          });
-        });
-
-        return games.length;
-      }
-
-
-
-      return '';
+      var a = this.$store.getters.getMatchesBetween(p1.account_id, p2.account_id)
+      if (a)
+        return a.length;
+      else
+        return '';
     },
     getHero: function(heroId) {
       return this.$store.getters.getHero(heroId);
